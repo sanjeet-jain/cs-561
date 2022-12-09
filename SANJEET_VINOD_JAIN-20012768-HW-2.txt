@@ -71,7 +71,7 @@ group by cust,prod,state,month
 order by cust,prod,state,month
 ;
 
-select tm.cust,tm.prod,tm.state,tm.month, 
+select tm.cust as customer,tm.prod as product,tm.state,tm.month, 
 cast( t1.average as int ) as before_average,
 cast( t2.average as int ) as after_average
 from temp_master as tm
@@ -131,15 +131,12 @@ Median value of the list {13, 23, 12, 16, 15, 9, 29} is 15'as varchar(1000)) as 
 
 -- with the count method as professor had hinted in class
 with frequency as (
---this statement calculates the frequency of any quantity
-select
-    prod,quant,count(*) as frequency
+select prod,quant,count(*) as frequency
   from sales
   group by prod,quant
   order by prod,quant
 ), 
 ranks as (
---this statement calculates the ranks. it assigns the same ranks for the same values.
 select a.prod, a.quant, sum(b.frequency) as rank
   from frequency a
   left join frequency b on a.prod = b.prod and a.quant >= b.quant
@@ -147,13 +144,11 @@ select a.prod, a.quant, sum(b.frequency) as rank
   order by a.prod, a.quant
 ), 
 max_ranks as (
---getting first half of max rank values
   select a.prod, max(a.rank)/2 as max_rank_half
   from ranks a
   group by a.prod
 ), 
 middlevalues as (
---finding new middle value to find median
 select
     a.prod,
     a.quant,
@@ -163,7 +158,6 @@ select
   from ranks a
   left join max_ranks b on a.prod = b.prod
 )
---finding average of values which falls between half of max rank and new rank
 select
     a.prod as product,
     cast(avg(a.quant) as decimal(10,2)) as median_quant
@@ -203,7 +197,7 @@ with q1 as (
 -- now we select the top rows of the above result and take only those rows that satify the 75% condition
 select 
 distinct on(cust,prod)
-cust,prod,month
+cust as customer,prod as product,month as "75% purchased by month"
 from q1
 where upto_month_total > ( 
     select max(upto_month_total)*0.75 
