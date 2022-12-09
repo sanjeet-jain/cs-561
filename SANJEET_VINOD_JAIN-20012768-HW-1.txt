@@ -1,0 +1,576 @@
+/*
+CS561 – SQL Programming Assignment 1
+Author: SANJEET VINOD JAIN
+CWID: 20012768
+
+Assuming the script is run on a system with sales table already loaded and connected to
+*/
+select 
+  CAST(
+    '1.
+For each product compute the maximum and minimum sales quantities along with the 
+corresponding customer (who purchased the product), dates (i.e., dates of those 
+maximum and minimum sales quantities) and the state in which the sale transaction 
+took place. 
+For the same product, compute the average sales quantity. ' as varchar(1000)
+  ) as report_1;
+with tempmax as (
+  with mma as (
+    select 
+      prod, 
+      max(quant) as maxq, 
+      min(quant) as minq, 
+      round(
+        avg(quant), 
+        0
+      ) as avgq 
+    from 
+      sales 
+    group by 
+      prod
+  ) 
+  select 
+    -- distinct on (mma.prod)
+    sales.prod, 
+    mma.maxq, 
+    sales.cust, 
+    sales.date, 
+    sales.state, 
+    mma.minq, 
+    mma.avgq 
+  from 
+    mma 
+    inner join sales on mma.prod = sales.prod 
+    and mma.maxq = sales.quant
+) 
+select 
+  -- distinct on (tempmax.prod)
+  tempmax.prod as PRODUCT, 
+  tempmax.maxq as MAX_Q, 
+  tempmax.cust AS MAX_CUST, 
+  to_char(tempmax.date, 'MM-DD-YYYY') AS MAX_DATE, 
+  tempmax.state AS ST, 
+  tempmax.minq AS MIN_Q, 
+  sales.cust AS MIN_CUST, 
+  to_char(sales.date, 'MM-DD-YYYY') AS MIN_DATE, 
+  sales.state AS ST, 
+  tempmax.avgq AS AVG_Q 
+from 
+  tempmax 
+  inner join sales on sales.prod = tempmax.prod 
+  and sales.quant = tempmax.minq 
+order by 
+  tempmax.prod;
+---------------------------------------------------------------------------------------------------------------------
+select 
+  CAST(
+    '2.  For each combination of customer and product, output the maximum sales quantities 
+for NY and minimum sales quantities for NJ and CT in 3 separate columns.  Like the 
+first report, display the corresponding dates (i.e., dates of those maximum and 
+minimum sales quantities).  Furthermore, for CT and NJ, include only the sales that 
+occurred after 2000; for NY, include all sales.' as varchar(1000)
+  ) as report_2;
+select 
+  cust, 
+  prod, 
+  max(quant) as maxq, 
+  min(quant) as minq, 
+  state into temp table mma 
+from 
+  sales 
+where 
+  state in ('NY', 'NJ', 'CT') 
+group by 
+  cust, 
+  prod, 
+  state 
+order by 
+  cust, 
+  prod;
+select 
+  distinct on (mma.cust, mma.prod, state) mma.cust, 
+  mma.prod, 
+  mma.maxq, 
+  sales.date, 
+  mma.state into temp table nymax 
+from 
+  mma 
+  join sales on mma.cust = sales.cust 
+  and mma.prod = sales.prod 
+  and mma.maxq = sales.quant 
+  and sales.state = mma.state 
+where 
+  mma.state = 'NY';
+select 
+  distinct on (mma.cust, mma.prod) mma.cust, 
+  mma.prod, 
+  mma.minq, 
+  sales.date into temp table njmin 
+from 
+  mma 
+  join sales on mma.cust = sales.cust 
+  and mma.prod = sales.prod 
+  and sales.state = mma.state 
+  and mma.minq = sales.quant 
+where 
+  mma.state = 'NJ';
+select 
+  distinct on (mma.cust, mma.prod) mma.cust, 
+  mma.prod, 
+  mma.minq, 
+  sales.date into temp table ctmin 
+from 
+  mma 
+  join sales on mma.cust = sales.cust 
+  and mma.prod = sales.prod 
+  and sales.state = mma.state 
+  and mma.minq = sales.quant 
+where 
+  sales.state = 'CT';
+with temp as (
+  select 
+    distinct on (nymax.cust, nymax.prod) nymax.cust, 
+    nymax.prod, 
+    nymax.maxq as ny_max, 
+    nymax.date as ny_maxdate, 
+    njmin.minq as nj_min, 
+    njmin.date as nj_mindate 
+  from 
+    nymax 
+    inner join njmin on nymax.cust = njmin.cust 
+    and nymax.prod = njmin.prod
+) 
+select 
+  temp.cust, 
+  temp.prod, 
+  temp.ny_max, 
+  to_char(temp.ny_maxdate, 'MM-DD-YYYY') as ny_maxdate, 
+  temp.nj_min, 
+  to_char(temp.nj_mindate, 'MM-DD-YYYY') as nj_mindate, 
+  ctmin.minq as ct_min, 
+  to_char(ctmin.date, 'MM-DD-YYYY') as ct_mindate 
+from 
+  temp 
+  join ctmin on temp.cust = ctmin.cust 
+  and temp.prod = ctmin.prod;
+--clear memory of temp tables
+drop 
+  table nymax, 
+  njmin, 
+  ctmin;
+---------------------------------------------------------------------------------------------------------------------
+select 
+  cast(
+    '3.  For each of the 12 months (regardless of the year), find the most “popular” and least 
+“popular” states (those states with most and least total sales quantities) and the 
+corresponding total sales quantities (i.e., SUMs). ' as varchar(1000)
+  ) as report_3;
+select 
+  sum(quant) as sum, 
+  month, 
+  state into temp table monthsum 
+from 
+  sales 
+group by 
+  month, 
+  state;
+select 
+  month, 
+  monthsum.state, 
+  sum as max into temp table max_final 
+from 
+  monthsum 
+where 
+  (sum, month) in (
+    select 
+      max(sum), 
+      month 
+    from 
+      monthsum 
+    group by 
+      month 
+    order by 
+      month
+  ) 
+order by 
+  month;
+select 
+  month, 
+  state, 
+  sum as min into temp table min_final 
+from 
+  monthsum 
+where 
+  (sum, month) in (
+    select 
+      min(sum), 
+      month 
+    from 
+      monthsum 
+    group by 
+      month 
+    order by 
+      month
+  ) 
+order by 
+  month;
+select 
+  mxf.month as month, 
+  mxf.state as most_popular_st, 
+  mxf.max as most_pop_total_q, 
+  mnf.state as least_popular_st, 
+  mnf.min as least_pop_total_q 
+from 
+  max_final as mxf 
+  inner join min_final as mnf on mxf.month = mnf.month;
+--clear memory of temp tables
+drop 
+  table monthsum, 
+  min_final, 
+  max_final;
+/* 
+ALTERNATIVE APPROACH
+We can also use the concept of ranking each entry of each state 
+and corresponding month in the inner select query where the entries 
+with the max sum is ranked as 1 and the min sum is the highest rank 
+integer this will allow us to easily extract the min and max for 
+each month and the corresponding state as well.
+we will partition the inner query based on the month and rank it 
+based on the max sales using the in window rank() function 
+*/
+-- select * 
+-- into temp table max_final1
+-- from (
+--     select month,state,max,
+--     rank() over ( partition by month order by max desc) as rn
+--     from (
+--         select month,state,sum(quant) as max
+--         from sales
+--         group by month,state
+--     ) as t
+-- ) as s
+-- where s.rn = 1
+-- ;
+-- select *
+-- into temp table min_final1 
+-- from (
+--     select month,state,min,
+--     rank() over ( partition by month order by min) as rn
+--     from (
+--         select month,state,sum(quant) as min
+--         from sales
+--         group by month,state
+--     ) as t
+-- ) as s
+-- where s.rn = 1
+-- ;
+-- select mxf.month as month,mxf.state as most_popular_st, mxf.max as most_pop_total_q,mnf.state as least_popular_st, mnf.min as least_pop_total_q
+-- from max_final1 as mxf
+-- inner join min_final1 as mnf
+-- on mxf.month = mnf.month
+-- ;
+-- --clear memory of temp tables
+-- drop table monthsum,min_final1,max_final1;
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+select 
+  cast(
+    '4. For each customer, find the “most favorite” product (which the customer purchased 
+the most), the “least favorite” product (which the customer purchased the least), the 
+“most favorable state” (where the most amounts of purchases were made) and the 
+“least favorable state” (where the least amounts of purchases were made).' as varchar(1000)
+  ) as report_4;
+with temp as (
+  select 
+    cust, 
+    prod as most_fav_prod, 
+    sum(quant) as max 
+  from 
+    sales 
+  group by 
+    cust, 
+    prod 
+  order by 
+    cust, 
+    max desc
+) 
+select 
+  * into temp table cust_prod_max 
+from 
+  temp 
+where 
+  (cust, max) in (
+    select 
+      cust, 
+      max(max) 
+    from 
+      temp 
+    group by 
+      cust 
+    order by 
+      cust
+  ) 
+order by 
+  cust, 
+  max desc;
+with temp as (
+  select 
+    cust, 
+    state as most_fav_st, 
+    sum(quant) as max 
+  from 
+    sales 
+  group by 
+    cust, 
+    state 
+  order by 
+    cust, 
+    max desc
+) 
+select 
+  * into temp table cust_state_max 
+from 
+  temp 
+where 
+  (cust, max) in (
+    select 
+      cust, 
+      max(max) 
+    from 
+      temp 
+    group by 
+      cust 
+    order by 
+      cust
+  ) 
+order by 
+  cust, 
+  max desc;
+with temp as (
+  select 
+    cust, 
+    prod as least_fav_prod, 
+    sum(quant) as min 
+  from 
+    sales 
+  group by 
+    cust, 
+    prod 
+  order by 
+    cust, 
+    min desc
+) 
+select 
+  * into temp table cust_prod_min 
+from 
+  temp 
+where 
+  (cust, min) in (
+    select 
+      cust, 
+      min(min) 
+    from 
+      temp 
+    group by 
+      cust 
+    order by 
+      cust
+  ) 
+order by 
+  cust, 
+  min desc;
+with temp as (
+  select 
+    cust, 
+    state as least_fav_st, 
+    sum(quant) as min 
+  from 
+    sales 
+  group by 
+    cust, 
+    state 
+  order by 
+    cust, 
+    min desc
+) 
+select 
+  * into temp table cust_state_min 
+from 
+  temp 
+where 
+  (cust, min) in (
+    select 
+      cust, 
+      min(min) 
+    from 
+      temp 
+    group by 
+      cust 
+    order by 
+      cust
+  ) 
+order by 
+  cust, 
+  min desc;
+select 
+  cpmx.cust, 
+  cpmx.most_fav_prod, 
+  cpmn.least_fav_prod, 
+  csmx.most_fav_st, 
+  csmn.least_fav_st 
+-- -- uncomment to verify
+  -- ,cpmx.max as max_prod_quant, 
+  -- cpmn.min as min_prod_quant, 
+  -- csmx.max as max_st_quant, 
+  -- csmn.min as min_st_quant 
+from 
+  cust_prod_max as cpmx 
+  join cust_prod_min as cpmn on cpmx.cust = cpmn.cust 
+  join cust_state_max as csmx on csmx.cust = cpmx.cust 
+  join cust_state_min as csmn on csmn.cust = csmx.cust;
+--clear memory of temp tables
+drop 
+  table cust_prod_max, 
+  cust_prod_min, 
+  cust_state_max, 
+  cust_state_min;
+--alternative using concept of ranking as explained in previous question
+-- select cust,prod as least_fav_prod
+-- into temp table cust_prod_min
+-- from (
+--     select cust,prod,sum,
+--     rank() over (partition by cust order by sum) as rn
+--     from (
+--         select cust, prod,sum(quant) as sum
+--         from sales
+--         group by cust,prod
+--     ) as t
+-- ) as s
+-- where s.rn=1
+-- order by cust
+-- ;
+-- select cust,state as least_fav_st
+-- into temp table cust_state_min
+-- from (
+--     select cust,state,sum,
+--     rank() over (partition by cust order by sum) as rn
+--     from (
+--         select cust, state,sum(quant) as sum
+--         from sales
+--         group by cust,state
+--     ) as t
+-- ) as s
+-- where s.rn=1
+-- order by cust
+-- ;
+-- select cust,prod as most_fav_prod
+-- into temp table cust_prod_max
+-- from (
+--     select cust,prod,sum,
+--     rank() over (partition by cust order by sum desc) as rn
+--     from (
+--         select cust, prod,sum(quant) as sum
+--         from sales
+--         group by cust,prod
+--     ) as t
+-- ) as s
+-- where s.rn=1
+-- order by cust
+-- ;
+-- select cust,state as most_fav_st
+-- into temp table cust_state_max
+-- from (
+--     select cust,state,sum,
+--     rank() over (partition by cust order by sum desc) as rn
+--     from (
+--         select cust, state,sum(quant) as sum
+--         from sales
+--         group by cust,state
+--     ) as t
+-- ) as s
+-- where s.rn=1
+-- order by cust
+-- ;
+-- select cpmx.cust,cpmx.most_fav_prod,cpmn.least_fav_prod,csmx.most_fav_st,csmn.least_fav_st
+-- from cust_prod_max as cpmx
+-- join cust_prod_min as cpmn
+-- on cpmx.cust=cpmn.cust
+-- join cust_state_max as csmx
+-- on csmx.cust=cpmx.cust
+-- join cust_state_min as csmn
+-- on csmn.cust=csmx.cust
+-- ;
+-- --clear memory of temp tables
+-- drop table cust_prod_max,cust_prod_min,cust_state_max,cust_state_min;
+---------------------------------------------------------------------------------------------------------------------
+select 
+  cast(
+    '5. Show for each customer and product combination, the total sales quantities for 4 
+quarters, Q1, Q2, Q3 and Q4 (in four separate columns) – Q1 being the first 3 months 
+of the year (Jan, Feb & Mar), Q2 the next 3 months (Apr, May & Jun), and so on –
+ignore the YEAR component of the dates (i.e., 3/11/2001 is considered the same date 
+as 3/11/2002, etc.). Also compute the average for the “whole” year (again ignoring 
+the YEAR component, meaning simply compute AVG) along with the total quantities
+(SUM) and the counts (COUNT)' as varchar(1000)
+  ) as report_5;
+with quarterly_report as (
+  with temp as (
+    select 
+      cust, 
+      prod, 
+      sum(
+        case when month in (1, 2, 3) then quant else 0 end
+      ) as q1_sum, 
+      sum(
+        case when month in (4, 5, 6) then quant else 0 end
+      ) as q2_sum, 
+      sum(
+        case when month in (7, 8, 9) then quant else 0 end
+      ) as q3_sum, 
+      sum(
+        case when month in (10, 11, 12) then quant else 0 end
+      ) as q4_sum, 
+      --count refers to the number of purchases made by a cust for a prod
+      count(prod) as count 
+    from 
+      sales 
+    group by 
+      cust, 
+      prod, 
+      month 
+    order by 
+      cust, 
+      prod
+  ) 
+  select 
+    cust, 
+    prod, 
+    sum(q1_sum) as q1_sum, 
+    sum(q2_sum) as q2_sum, 
+    sum(q3_sum) as q3_sum, 
+    sum(q4_sum) as q4_sum, 
+    sum(count) as count 
+  from 
+    temp 
+  group by 
+    cust, 
+    prod
+) 
+select 
+  cust, 
+  prod, 
+  q1_sum, 
+  q2_sum, 
+  q3_sum, 
+  q4_sum, 
+  cast(
+    (q1_sum + q2_sum + q3_sum + q4_sum)/ 4 as int
+  ) as avg_sales, 
+  cast(
+    (q1_sum + q2_sum + q3_sum + q4_sum) as int
+  ) as total, 
+  count 
+from 
+  quarterly_report 
+order by 
+  cust, 
+  prod;
